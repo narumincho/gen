@@ -19,6 +19,22 @@ WebAssembly.instantiate(
           right: { tag: "I32Const", value: 1 },
         },
       },
+      {
+        export: { tag: "export", name: "よん" },
+        expr: {
+          tag: "I32Sub",
+          left: { tag: "I32Const", value: 5 },
+          right: { tag: "I32Const", value: 1 },
+        },
+      },
+      {
+        export: { tag: "export", name: "マイナス" },
+        expr: {
+          tag: "I32Sub",
+          left: { tag: "I32Const", value: 1000 },
+          right: { tag: "I32Const", value: 100000 },
+        },
+      },
     ],
   }),
   {}

@@ -26,20 +26,36 @@ const wasmBinaryMagic: ReadonlyArray<number> = [0x00, 0x61, 0x73, 0x6d];
 const wasmBinaryVersion: ReadonlyArray<number> = [0x01, 0x00, 0x00, 0x00];
 
 /**
+ * よく使われる要素数と中身
+ */
+const vectorToWasmBinary = (
+  binaryList: ReadonlyArray<ReadonlyArray<number>>
+) => {
+  return [...uInt32ToBinary(binaryList.length), ...binaryList.flat()];
+};
+
+/**
+ * セクションの内容をバイナリ形式に変換する
+ */
+const sectionToWasmBinary = (
+  sectionCode: number,
+  binary: ReadonlyArray<number>
+) => {
+  return [sectionCode, ...uInt32ToBinary(binary.length), ...binary];
+};
+
+/**
  * 使われる型の組み合わせを指定する
  * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#type-section
  */
 
 const typeSection = (): ReadonlyArray<number> => {
-  const numberOfType: ReadonlyArray<number> = [1];
-
   /**
    * とりあえず ():i32 だけ
    */
-  const body: ReadonlyArray<number> = [0x60, 0x00, 0x01, 0x7f];
+  const i32Type: ReadonlyArray<number> = [0x60, 0x00, 0x01, 0x7f];
 
-  const length: number = numberOfType.length + body.length;
-  return [0x01, ...uInt32ToBinary(length), ...numberOfType, ...body];
+  return sectionToWasmBinary(0x01, vectorToWasmBinary([i32Type]));
 };
 
 /**
@@ -49,16 +65,14 @@ const typeSection = (): ReadonlyArray<number> => {
 const functionSection = (
   functionList: ReadonlyArray<WasmFunction>
 ): ReadonlyArray<number> => {
-  const numberOfFunctionBinary = [functionList.length];
-
   /**
    * とりあえず, すべての関数の型はTypeSectionで指定した0番にしよう
    */
-  const body = new Array(functionList.length).fill(0x00);
+  const body: ReadonlyArray<ReadonlyArray<number>> = new Array(
+    functionList.length
+  ).fill([0x00]);
 
-  const length = numberOfFunctionBinary.length + body.length;
-
-  return [0x03, ...uInt32ToBinary(length), ...numberOfFunctionBinary, ...body];
+  return sectionToWasmBinary(0x03, vectorToWasmBinary(body));
 };
 
 /**
@@ -69,30 +83,26 @@ const functionSection = (
 const exportSection = (
   functionList: ReadonlyArray<WasmFunction>
 ): ReadonlyArray<number> => {
-  const numberOfFunctionBinary = [functionList.length];
+  const binaryList: Array<ReadonlyArray<number>> = [];
+  for (const [index, func] of functionList.entries()) {
+    if (func.export.tag === "export") {
+      binaryList.push(exportFunctionName(func.export.name, index));
+    }
+  }
 
-  const body = functionList.flatMap((func, index) =>
-    func.export.tag === "export"
-      ? exportFunctionName(func.export.name, index)
-      : []
-  );
-
-  const length = numberOfFunctionBinary.length + body.length;
-
-  return [0x07, ...uInt32ToBinary(length), ...numberOfFunctionBinary, ...body];
+  return sectionToWasmBinary(0x07, vectorToWasmBinary(binaryList));
 };
 
 const exportFunctionName = (
   functionName: string,
   functionIndex: number
 ): ReadonlyArray<number> => {
-  const digitList: ReadonlyArray<number> = [...functionName].map(
-    (char) => char.codePointAt(0) as number
-  );
+  const textEncoder = new TextEncoder();
+  const digitList = textEncoder.encode(functionName);
   return [
     digitList.length,
     ...digitList,
-    // 文字の終わり示す
+    // 文字の終わり示す???????
     0x00,
     // エキスポートする関数の番号
     functionIndex,
@@ -107,15 +117,12 @@ const exportFunctionName = (
 const codeSection = (
   functionList: ReadonlyArray<WasmFunction>
 ): ReadonlyArray<number> => {
-  const numberOfFunctionBinary = [functionList.length];
-
   /**
-   *  TODO 雑な実装 これでちゃんと複数の定義に対応できているのか?
+   *  関数の定義
    */
-  const body = functionList.flatMap((func) => optToBinary(func.expr));
+  const body = functionList.map((func) => optToBinary(func.expr));
 
-  const length = numberOfFunctionBinary.length + body.length;
-  return [0x0a, ...uInt32ToBinary(length), ...numberOfFunctionBinary, ...body];
+  return sectionToWasmBinary(0x0a, vectorToWasmBinary(body));
 };
 /**
  * 1番左のビットをONにする
@@ -152,6 +159,7 @@ const byteToString = (value: number): string => {
  * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#primitive-encoding-types"
  *
  * 符号付き32bit整数1byte ～ 5 byteの可変長のバイナリに変換する
+ * LEB128
  */
 const int32ToBinary = (x: number): ReadonlyArray<number> => {
   /** 0~6 ビット目 */
@@ -186,6 +194,7 @@ const int32ToBinary = (x: number): ReadonlyArray<number> => {
  * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#primitive-encoding-types
  *
  * 符号なし32bit整数を1byte ～ 5 byteの可変長のバイナリに変換する
+ * LEB128
  */
 const uInt32ToBinary = (x: number): ReadonlyArray<number> => {
   /** 0~6 ビット目 */
