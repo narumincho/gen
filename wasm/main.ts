@@ -1,9 +1,3 @@
-/*
- * WebAssembly.instantiate(new Uint8Array([]), {}).then((result) => {
- *   console.log(result.instance.exports);
- * });
- */
-
 /**
  * WASM_BINARY_MAGIC
  *
@@ -130,7 +124,7 @@ const get7Bits = (value: number, offset: number): number => {
 };
 
 /**
- * 8bit を表示する
+ * 8bit を表示する. デバッグ用
  */
 const byteToString = (value: number): string => {
   return value.toString(2).padStart(8, "0");
@@ -203,3 +197,91 @@ const uInt32ToBinary = (x: number): ReadonlyArray<number> => {
 
   return [onLeftBit(b0), onLeftBit(b1), onLeftBit(b2), onLeftBit(b3), b4];
 };
+
+type WatLike =
+  | { tag: "I32Const"; value: number }
+  | { tag: "Call"; functionIndex: number }
+  | { tag: "I32Add" }
+  | { tag: "I32Sub" }
+  | { tag: "I32Mul" };
+
+type Opt =
+  | { tag: "I32Add"; left: Opt; right: Opt }
+  | { tag: "I32Sub"; left: Opt; right: Opt }
+  | { tag: "I32Mul"; left: Opt; right: Opt }
+  | { tag: "I32Const"; value: number }
+  | { tag: "Call"; functionIdex: number };
+
+const optToBinary = (opt: Opt): ReadonlyArray<number> => {
+  const binary = [
+    0x00,
+    ...optToWatLikeList(opt).flatMap(watLikeToBinary),
+    0x0b,
+  ];
+
+  return [...uInt32ToBinary(binary.length), ...binary];
+};
+
+const optToWatLikeList = (opt: Opt): ReadonlyArray<WatLike> => {
+  switch (opt.tag) {
+    case "I32Add":
+      return [
+        ...optToWatLikeList(opt.left),
+        ...optToWatLikeList(opt.right),
+        { tag: "I32Add" },
+      ];
+    case "I32Sub":
+      return [
+        ...optToWatLikeList(opt.left),
+        ...optToWatLikeList(opt.right),
+        { tag: "I32Sub" },
+      ];
+    case "I32Mul":
+      return [
+        ...optToWatLikeList(opt.left),
+        ...optToWatLikeList(opt.right),
+        { tag: "I32Mul" },
+      ];
+    case "I32Const":
+      return [{ tag: "I32Const", value: opt.value }];
+    case "Call":
+      return [{ tag: "Call", functionIndex: opt.functionIdex }];
+  }
+};
+
+const watLikeToBinary = (watLike: WatLike): ReadonlyArray<number> => {
+  switch (watLike.tag) {
+    case "I32Const":
+      return [0x41, ...uInt32ToBinary(watLike.value)];
+    case "Call":
+      return [0x10, ...uInt32ToBinary(watLike.functionIndex)];
+    case "I32Add":
+      return [0x6a];
+    case "I32Sub":
+      return [0x6b];
+    case "I32Mul":
+      return [0x6c];
+  }
+};
+
+WebAssembly.instantiate(
+  new Uint8Array([
+    ...wasmBinaryMagic,
+    ...wasmBinaryVersion,
+    ...typeSection(),
+    ...functionSection(1),
+    ...exportSection(1),
+    ...codeSection([
+      optToBinary({
+        tag: "I32Add",
+        left: { tag: "I32Const", value: 20 },
+        right: { tag: "I32Const", value: 8 },
+      }),
+    ]),
+  ]),
+  {}
+).then((result) => {
+  for (const [name, func] of Object.entries(result.instance.exports)) {
+    console.log(name, (func as () => void)());
+  }
+});
