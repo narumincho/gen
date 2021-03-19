@@ -17,6 +17,10 @@ export const numTypeToWasmBinary = (
   }
 };
 
+/**
+ * functype
+ * https://webassembly.github.io/spec/core/syntax/types.html#syntax-functype
+ */
 export type FunctionType = {
   parameter: ReadonlyArray<NumType>;
   result: ReadonlyArray<NumType>;

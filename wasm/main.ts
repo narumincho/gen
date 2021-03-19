@@ -1,4 +1,4 @@
-import { functionTypeToWasmBinary } from "./type";
+import { FunctionType, functionTypeToWasmBinary } from "./type";
 import { uInt32ToBinary } from "./value";
 import { vectorToWasmBinary } from "./vector";
 
@@ -44,16 +44,13 @@ const sectionToWasmBinary = (
  * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#type-section
  */
 
-const typeSection = (): ReadonlyArray<number> => {
-  /**
-   * とりあえず ():i32 だけ
-   */
-  const i32Type: ReadonlyArray<number> = functionTypeToWasmBinary({
-    parameter: [],
-    result: ["i32"],
-  });
-
-  return sectionToWasmBinary(0x01, vectorToWasmBinary([i32Type]));
+const typeSection = (
+  functionTypeList: ReadonlyArray<FunctionType>
+): ReadonlyArray<number> => {
+  return sectionToWasmBinary(
+    0x01,
+    vectorToWasmBinary(functionTypeList.map(functionTypeToWasmBinary))
+  );
 };
 
 /**
@@ -193,7 +190,12 @@ export const optToWasmBinary = (wasm: Wasm): Uint8Array => {
   return new Uint8Array([
     ...wasmBinaryMagic,
     ...wasmBinaryVersion,
-    ...typeSection(),
+    ...typeSection([
+      {
+        parameter: [],
+        result: ["i32"],
+      },
+    ]),
     ...functionSection(wasm.functionList),
     ...exportSection(wasm.functionList),
     ...codeSection(wasm.functionList),
