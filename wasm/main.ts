@@ -1,3 +1,12 @@
+export type Wasm = {
+  functionList: ReadonlyArray<WasmFunction>;
+};
+
+export type WasmFunction = {
+  export: { tag: "export"; name: string } | { tag: "local" };
+  expr: Opt;
+};
+
 /**
  * WASM_BINARY_MAGIC
  *
@@ -5,7 +14,7 @@
  *
  * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#module-contents
  */
-export const wasmBinaryMagic: ReadonlyArray<number> = [0x00, 0x61, 0x73, 0x6d];
+const wasmBinaryMagic: ReadonlyArray<number> = [0x00, 0x61, 0x73, 0x6d];
 
 /**
  * WASM_BINARY_VERSION
@@ -37,13 +46,15 @@ const typeSection = (): ReadonlyArray<number> => {
  * 関数の型をTypeSectionで指定した番号で指定する
  * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#function-section
  */
-const functionSection = (numberOfFunction: number): ReadonlyArray<number> => {
-  const numberOfFunctionBinary = [numberOfFunction];
+const functionSection = (
+  functionList: ReadonlyArray<WasmFunction>
+): ReadonlyArray<number> => {
+  const numberOfFunctionBinary = [functionList.length];
 
   /**
    * とりあえず, すべての関数の型はTypeSectionで指定した0番にしよう
    */
-  const body = new Array(numberOfFunction).fill(0x00);
+  const body = new Array(functionList.length).fill(0x00);
 
   const length = numberOfFunctionBinary.length + body.length;
 
@@ -55,20 +66,27 @@ const functionSection = (numberOfFunction: number): ReadonlyArray<number> => {
  *
  * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#export-section
  */
-const exportSection = (numberOfFunction: number): ReadonlyArray<number> => {
-  const numberOfFunctionBinary = [numberOfFunction];
+const exportSection = (
+  functionList: ReadonlyArray<WasmFunction>
+): ReadonlyArray<number> => {
+  const numberOfFunctionBinary = [functionList.length];
 
-  const body = new Array(numberOfFunction)
-    .fill(0)
-    .flatMap((index) => exportFunctionName(index));
+  const body = functionList.flatMap((func, index) =>
+    func.export.tag === "export"
+      ? exportFunctionName(func.export.name, index)
+      : []
+  );
 
   const length = numberOfFunctionBinary.length + body.length;
 
   return [0x07, ...uInt32ToBinary(length), ...numberOfFunctionBinary, ...body];
 };
 
-const exportFunctionName = (index: number): ReadonlyArray<number> => {
-  const digitList: ReadonlyArray<number> = [...`output_${index}`].map(
+const exportFunctionName = (
+  functionName: string,
+  functionIndex: number
+): ReadonlyArray<number> => {
+  const digitList: ReadonlyArray<number> = [...functionName].map(
     (char) => char.codePointAt(0) as number
   );
   return [
@@ -77,7 +95,7 @@ const exportFunctionName = (index: number): ReadonlyArray<number> => {
     // 文字の終わり示す
     0x00,
     // エキスポートする関数の番号
-    index,
+    functionIndex,
   ];
 };
 
@@ -87,14 +105,14 @@ const exportFunctionName = (index: number): ReadonlyArray<number> => {
  * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#code-section
  */
 const codeSection = (
-  codeList: ReadonlyArray<ReadonlyArray<number>>
+  functionList: ReadonlyArray<WasmFunction>
 ): ReadonlyArray<number> => {
-  const numberOfFunctionBinary = [codeList.length];
+  const numberOfFunctionBinary = [functionList.length];
 
   /**
    *  TODO 雑な実装 これでちゃんと複数の定義に対応できているのか?
    */
-  const body = codeList.flat();
+  const body = functionList.flatMap((func) => optToBinary(func.expr));
 
   const length = numberOfFunctionBinary.length + body.length;
   return [0x0a, ...uInt32ToBinary(length), ...numberOfFunctionBinary, ...body];
@@ -205,7 +223,7 @@ type WatLike =
   | { tag: "I32Sub" }
   | { tag: "I32Mul" };
 
-type Opt =
+export type Opt =
   | { tag: "I32Add"; left: Opt; right: Opt }
   | { tag: "I32Sub"; left: Opt; right: Opt }
   | { tag: "I32Mul"; left: Opt; right: Opt }
@@ -264,13 +282,13 @@ const watLikeToBinary = (watLike: WatLike): ReadonlyArray<number> => {
   }
 };
 
-export const optToWasmBinary = (optList: ReadonlyArray<Opt>): Uint8Array => {
+export const optToWasmBinary = (wasm: Wasm): Uint8Array => {
   return new Uint8Array([
     ...wasmBinaryMagic,
     ...wasmBinaryVersion,
     ...typeSection(),
-    ...functionSection(1),
-    ...exportSection(1),
-    ...codeSection(optList.map(optToBinary)),
+    ...functionSection(wasm.functionList),
+    ...exportSection(wasm.functionList),
+    ...codeSection(wasm.functionList),
   ]);
 };
