@@ -5,7 +5,7 @@
  *
  * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#module-contents
  */
-const wasmBinaryMagic: ReadonlyArray<number> = [0x00, 0x61, 0x73, 0x6d];
+export const wasmBinaryMagic: ReadonlyArray<number> = [0x00, 0x61, 0x73, 0x6d];
 
 /**
  * WASM_BINARY_VERSION
@@ -264,24 +264,13 @@ const watLikeToBinary = (watLike: WatLike): ReadonlyArray<number> => {
   }
 };
 
-WebAssembly.instantiate(
-  new Uint8Array([
+export const optToWasmBinary = (optList: ReadonlyArray<Opt>): Uint8Array => {
+  return new Uint8Array([
     ...wasmBinaryMagic,
     ...wasmBinaryVersion,
     ...typeSection(),
     ...functionSection(1),
     ...exportSection(1),
-    ...codeSection([
-      optToBinary({
-        tag: "I32Add",
-        left: { tag: "I32Const", value: 20 },
-        right: { tag: "I32Const", value: 8 },
-      }),
-    ]),
-  ]),
-  {}
-).then((result) => {
-  for (const [name, func] of Object.entries(result.instance.exports)) {
-    console.log(name, (func as () => void)());
-  }
-});
+    ...codeSection(optList.map(optToBinary)),
+  ]);
+};
