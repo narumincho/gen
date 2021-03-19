@@ -4,7 +4,7 @@
   "description": "code, setting file generator",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "ts-node start.ts"
   },
   "repository": {
     "type": "git",
@@ -17,8 +17,13 @@
   },
   "homepage": "https://github.com/narumincho/gen#readme",
   "devDependencies": {
-    "eslint": "^7.22.0",
-    "prettier": "^2.2.1",
-    "typescript": "^4.2.3"
+    "@typescript-eslint/eslint-plugin": "4.18.0",
+    "@typescript-eslint/parser": "4.18.0",
+    "esbuild": "^0.9.3",
+    "eslint": "7.22.0",
+    "fastify": "^3.14.0",
+    "prettier": "2.2.1",
+    "ts-node": "9.1.1",
+    "typescript": "4.2.3"
   }
 }
