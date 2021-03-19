@@ -1,6 +1,8 @@
-// WebAssembly.instantiate(new Uint8Array([]), {}).then((result) => {
-//   console.log(result.instance.exports);
-// });
+/*
+ * WebAssembly.instantiate(new Uint8Array([]), {}).then((result) => {
+ *   console.log(result.instance.exports);
+ * });
+ */
 
 /**
  * WASM_BINARY_MAGIC
@@ -37,6 +39,72 @@ const typeSection = (): ReadonlyArray<number> => {
   return [0x01, ...uInt32ToBinary(length), ...numberOfType, ...body];
 };
 
+/**
+ * 関数の型をTypeSectionで指定した番号で指定する
+ * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#function-section
+ */
+const functionSection = (numberOfFunction: number): ReadonlyArray<number> => {
+  const numberOfFunctionBinary = [numberOfFunction];
+
+  /**
+   * とりあえず, すべての関数の型はTypeSectionで指定した0番にしよう
+   */
+  const body = new Array(numberOfFunction).fill(0x00);
+
+  const length = numberOfFunctionBinary.length + body.length;
+
+  return [0x03, ...uInt32ToBinary(length), ...numberOfFunctionBinary, ...body];
+};
+
+/**
+ * エキスポートする関数を指定する
+ *
+ * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#export-section
+ */
+const exportSection = (numberOfFunction: number): ReadonlyArray<number> => {
+  const numberOfFunctionBinary = [numberOfFunction];
+
+  const body = new Array(numberOfFunction)
+    .fill(0)
+    .flatMap((index) => exportFunctionName(index));
+
+  const length = numberOfFunctionBinary.length + body.length;
+
+  return [0x07, ...uInt32ToBinary(length), ...numberOfFunctionBinary, ...body];
+};
+
+const exportFunctionName = (index: number): ReadonlyArray<number> => {
+  const digitList: ReadonlyArray<number> = [...`output_${index}`].map(
+    (char) => char.codePointAt(0) as number
+  );
+  return [
+    digitList.length,
+    ...digitList,
+    // 文字の終わり示す
+    0x00,
+    // エキスポートする関数の番号
+    index,
+  ];
+};
+
+/**
+ * それぞれの関数の中身をしていする
+ *
+ * https://github.com/sunfishcode/wasm-reference-manual/blob/master/WebAssembly.md#code-section
+ */
+const codeSection = (
+  codeList: ReadonlyArray<ReadonlyArray<number>>
+): ReadonlyArray<number> => {
+  const numberOfFunctionBinary = [codeList.length];
+
+  /**
+   *  TODO 雑な実装 これでちゃんと複数の定義に対応できているのか?
+   */
+  const body = codeList.flat();
+
+  const length = numberOfFunctionBinary.length + body.length;
+  return [0x0a, ...uInt32ToBinary(length), ...numberOfFunctionBinary, ...body];
+};
 /**
  * 1番左のビットをONにする
  * ```
@@ -130,7 +198,7 @@ const uInt32ToBinary = (x: number): ReadonlyArray<number> => {
   }
 
   if (b4 === 0) {
-    [onLeftBit(b0), onLeftBit(b1), onLeftBit(b2), b3];
+    return [onLeftBit(b0), onLeftBit(b1), onLeftBit(b2), b3];
   }
 
   return [onLeftBit(b0), onLeftBit(b1), onLeftBit(b2), onLeftBit(b3), b4];

@@ -28,6 +28,7 @@
         "allowElseIf": false
       }
     ],
+    "curly": "error",
     "one-var": ["error", "never"],
     "sort-keys": ["off"],
     "no-magic-numbers": ["off"],
